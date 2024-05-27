@@ -30,6 +30,7 @@ class Run():
         print(f"Training for {num_epochs} epochs started.")
         reclustering = None
         for epoch in range(num_epochs):
+            print(f"Epoch {epoch+1}/{num_epochs}")
             self.model.train()
             for batch_idx, (data, targets, _) in enumerate(train_loader):
                 data = data.to(self.device)

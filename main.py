@@ -27,7 +27,7 @@ transform = transforms.Compose([
 N_clusters = 100
 
 # Load Training metadata
-train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/"
+train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/" 
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
@@ -54,7 +54,7 @@ if torch.cuda.is_available():
 
 # Hyperparameters
 learning_rate = 0.0002
-num_epochs = 2
+
 
 model = ModifiedResNet18(N_clusters).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -64,10 +64,19 @@ Exp = Run(model,optimizer,scheduler,device)
 
 if __name__ == __name__ :
 
-    #Ck_spec = assembly(cluster,next(iter(cluster_dataloader)).numpy(), N_clusters) 
-    Ck_spec = np.load('models/Ck_species.npy')
-    model.load_state_dict(torch.load('models/resnet18-with-bioclimatic-cubes.pth'))
-    model.eval()
+    run_kmeans = False
+    new_model = False
+    num_epochs = 10
 
+    if run_kmeans :
+        Ck_spec = assembly(cluster,next(iter(cluster_dataloader)).numpy(), N_clusters)
+    else : 
+        Ck_spec = np.load('models/Ck_species.npy') 
+
+
+    if not new_model :
+        model.load_state_dict(torch.load('models/resnet18-with-bioclimatic-cubes.pth',torch.device('cpu')))
+        model.eval()
+    
     Exp.train(train_loader, num_epochs, Ck_spec)
     Exp.test(test_loader, Ck_spec)
