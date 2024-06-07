@@ -65,8 +65,8 @@ Exp = Run(model,optimizer,scheduler,device)
 
 if __name__ == '__main__' :
 
-    run_kmeans = True
-    new_model = False
+    run_kmeans = False
+    new_model = True
     num_epochs = 10
 
     if run_kmeans :

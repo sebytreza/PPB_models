@@ -26,39 +26,58 @@ class Run():
 
 
     def train(self, train_loader,num_epochs,Ck):
-
         print(f"Training for {num_epochs} epochs started.")
-        reclustering = None
+        Reclustering = None
+        p =  0.1 # part of the validation dataset
         for epoch in range(num_epochs):
             print(f"Epoch {epoch+1}/{num_epochs}")
             self.model.train()
-            for batch_idx, (data, targets, _) in enumerate(train_loader):
+            validation = False
+
+            for batch_idx, (data, targets, _) in tqdm(enumerate(train_loader), total = len(train_loader)):
                 data = data.to(self.device)
                 targets = targets.to(self.device)
 
                 self.optimizer.zero_grad()
-                outputs = self.model(data)
+
+                if batch_idx > (1-p)*len(train_loader) and not validation :
+                    self.model.eval()
+                    validation = True
+                    F1Score = 0
+                    AccScore = 0
+                    Len = 0
+                    Max_cluster = torch.Tensor([])
+
+                if not validation:
+                    outputs = self.model(data)
+                    
+                    positive_weight_factor = 1
+                    pos_weight = targets*positive_weight_factor  # All positive weights are equal to 10
+                    criterion = torch.nn.CrossEntropyLoss() #BCEWithLogitsLoss(pos_weight=pos_weight)
+                    loss = criterion(outputs, targets)
+                    #print(np.shape(targets), np.shape(outputs))
+                    loss.backward()
+                    self.optimizer.step()
                 
-                positive_weight_factor = 1
-                pos_weight = targets*positive_weight_factor  # All positive weights are equal to 10
-                criterion = torch.nn.CrossEntropyLoss() #BCEWithLogitsLoss(pos_weight=pos_weight)
-                loss = criterion(outputs, targets)
-                #print(np.shape(targets), np.shape(outputs))
-                loss.backward()
-                self.optimizer.step()
+                else :
+                    with torch.no_grad():
+                        outputs = self.model(data)
+                        for output, target in zip(outputs,targets):
+                            F1Score  += f1_score(Ck[torch.argmax(output, dim = 0).cpu()], Ck[torch.argmax(target, dim = 0).cpu().numpy()])
+                        AccScore += sum(torch.argmax(outputs, dim = 1).cpu() == torch.argmax(targets, dim = 1).cpu())
+                        Len += len(targets)
+                        Max_cluster = torch.cat((Max_cluster, torch.argmax(outputs, dim = 1).cpu()))
+                    
 
-                if batch_idx % 278 == 0:
-                    score = 0
-                    for output, target in zip(outputs,targets):
-                        score += f1_score(Ck[torch.argmax(outputs, dim = 1).cpu()], Ck[torch.argmax(targets, dim = 1).cpu().numpy()])
-                    print('mean F1 score :' , score/len(targets))
-                    #print(f"Epoch {epoch+1}/{num_epochs}, Batch {batch_idx}/{len(train_loader)}, Loss: {loss.item()}")
-
+                
             self.scheduler.step()
-            #print("Scheduler:",self.scheduler.state_dict())
-            if reclustering != None :
-                print('Estimated percentage of category change :', (torch.sum(torch.argmax(outputs, dim = 1).cpu() == reclustering)/len(outputs)).item())
-            reclustering = torch.argmax(outputs, dim = 1).cpu()
+
+            print(f'mean F1 score : {F1Score/Len:.2f}')
+            print(f'mean Accuracy : {AccScore/Len:.2f}')
+
+            if Reclustering != None :
+                print(f'Estimated percentage of category changes :{torch.sum( Max_cluster == Reclustering).item()/len(Max_cluster)*100 :.2f} %')
+            Reclustering = Max_cluster
 
         # Save the trained model
         self.model.eval()
