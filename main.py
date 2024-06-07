@@ -53,6 +53,7 @@ if torch.cuda.is_available():
     print("DEVICE = CUDA")
 
 # Hyperparameters
+
 learning_rate = 0.0002
 
 
@@ -62,14 +63,14 @@ scheduler = CosineAnnealingLR(optimizer, T_max=25, verbose=True)
 
 Exp = Run(model,optimizer,scheduler,device)
 
-if __name__ == __name__ :
+if __name__ == '__main__' :
 
-    run_kmeans = False
+    run_kmeans = True
     new_model = False
     num_epochs = 10
 
     if run_kmeans :
-        Ck_spec = assembly(cluster,next(iter(cluster_dataloader)).numpy(), N_clusters)
+        Ck_spec = assembly(cluster,next(iter(cluster_dataloader)).numpy(), N_clusters, save = True)
     else : 
         Ck_spec = np.load('models/Ck_species.npy') 
 

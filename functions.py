@@ -1,6 +1,7 @@
 import numpy as np 
 import random
 from tqdm import tqdm
+from sklearn.preprocessing import normalize
 
 def f1_score(survey1,survey2):
 
@@ -32,12 +33,12 @@ def true_pos(df1, df2, id_1, id_2):
 
 
 def Ck_species(df,method = 'all'): # method is 'all' or int (number of random picks)
-
+    normalize(df,'l2', axis = 1, copy = False)
     spec_ord = np.argsort(np.sum(df, axis = 0))
     assemblage = np.zeros_like(spec_ord)
     id = 0
     f1max, f1  = 0, 0
-    while f1 >= 0.5*f1max :
+    while f1 >= 0.5*f1max  and id < len(spec_ord) - 1:
         if f1 > f1max :
             f1max = f1
             assemblage_max = assemblage.copy()
@@ -56,14 +57,18 @@ def Ck_species(df,method = 'all'): # method is 'all' or int (number of random pi
     return assemblage_max, f1max
 
 
-def assembly(clusters, cluster_dt, N_cluster):
+def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
 
     N_spec = len(cluster_dt[0])
+    Score = np.zeros(N_cluster)
     Ck = np.zeros((N_cluster,N_spec))
     for cl in tqdm(range(N_cluster)):
         if sum((clusters.labels_ == cl)) != 0:
             spec_k, f1 = Ck_species(cluster_dt[(clusters.labels_ == cl)])
-            #print(f1)
+            Score[cl] = f1
             Ck[cl] = spec_k
-    np.save('models/Ck_species.npy', Ck)
+    if save:
+        np.save('models/Ck_species.npy', Ck)
+    if score :
+        return Ck, Score
     return Ck

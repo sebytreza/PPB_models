@@ -41,7 +41,7 @@ class Run():
                 
                 positive_weight_factor = 1
                 pos_weight = targets*positive_weight_factor  # All positive weights are equal to 10
-                criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+                criterion = torch.nn.CrossEntropyLoss() #BCEWithLogitsLoss(pos_weight=pos_weight)
                 loss = criterion(outputs, targets)
                 #print(np.shape(targets), np.shape(outputs))
                 loss.backward()
@@ -74,7 +74,7 @@ class Run():
                 data = data.to(self.device)
                 
                 outputs = self.model(data)
-                predictions = torch.sigmoid(outputs).cpu().numpy()
+                predictions = torch.sigmoid(outputs).cpu().numpy() #sigmoid useless here,
                 
                 ck_spec = Ck_spec[np.argmax(predictions, axis = 1)]
 

@@ -8,9 +8,10 @@ class Clustering(MiniBatchKMeans):
 
 
     def normed_fit(self,X) :
-        normalize(X,'l1', axis = 1, copy = False)
+        normalize(X,'l2', axis = 1, copy = False)
         return self.fit(X)
     
     def normed_predict(self,X) :
+        pass
         return self.predict(X)
     
