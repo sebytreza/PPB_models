@@ -15,8 +15,9 @@ from torch_kmeans import KMeans
 from dataset import TrainDataset, TestDataset, ClusteringDataset
 from model import ModifiedResNet18
 from train import Run
-from clustering import Clustering
+from clustering import Clustering, HClustering
 from functions import assembly
+from functions import dist1
 
 # Dataset and DataLoader
 batch_size = 64
@@ -26,17 +27,30 @@ transform = transforms.Compose([
 
 N_clusters = 100
 
+seed = 42
+# Set seed for Python's built-in random number generator
+torch.manual_seed(seed)
+# Set seed for numpy
+np.random.seed(seed)
+# Set seed for CUDA if available
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+    # Set cuDNN's random number generator seed for deterministic behavior
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 # Load Training metadata
 train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/" 
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
 clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
-#clustering = KMeans(n_clusters= N_clusters)
+#clustering = HClustering(n_clusters = N_clusters, metric = dist1, method = 'single')
 cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
-cluster = clustering.normed_fit(next(iter(cluster_dataloader)).numpy())
+cluster = clustering.fit(next(iter(cluster_dataloader)).numpy())
 train_dataset = TrainDataset(train_data_path, cluster, cluster_dataset, N_clusters, subset="train", transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle= True, num_workers=4)
 
 # Load Test metadata
 test_data_path = "data/cubes/GLC24-PA-test-bioclimatic_monthly/"
@@ -66,7 +80,7 @@ Exp = Run(model,optimizer,scheduler,device)
 if __name__ == '__main__' :
 
     run_kmeans = False
-    new_model = True
+    new_model = False
     num_epochs = 10
 
     if run_kmeans :

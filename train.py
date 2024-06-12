@@ -7,18 +7,6 @@ from functions import f1_score
 class Run():
     def __init__(self,model,optimizer,scheduler,device):
         
-        seed = 42
-        # Set seed for Python's built-in random number generator
-        torch.manual_seed(seed)
-        # Set seed for numpy
-        np.random.seed(seed)
-        # Set seed for CUDA if available
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-            # Set cuDNN's random number generator seed for deterministic behavior
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-        
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -28,7 +16,7 @@ class Run():
     def train(self, train_loader,num_epochs,Ck):
         print(f"Training for {num_epochs} epochs started.")
         Reclustering = None
-        p =  0.1 # part of the validation dataset
+        p =  0.99 # part of the validation dataset
         for epoch in range(num_epochs):
             print(f"Epoch {epoch+1}/{num_epochs}")
             self.model.train()
@@ -37,12 +25,12 @@ class Run():
             for batch_idx, (data, targets, _) in tqdm(enumerate(train_loader), total = len(train_loader)):
                 data = data.to(self.device)
                 targets = targets.to(self.device)
-
                 self.optimizer.zero_grad()
 
                 if batch_idx > (1-p)*len(train_loader) and not validation :
                     self.model.eval()
                     validation = True
+                    F1Pred = 0
                     F1Score = 0
                     AccScore = 0
                     Len = 0
@@ -62,8 +50,12 @@ class Run():
                 else :
                     with torch.no_grad():
                         outputs = self.model(data)
-                        for output, target in zip(outputs,targets):
-                            F1Score  += f1_score(Ck[torch.argmax(output, dim = 0).cpu()], Ck[torch.argmax(target, dim = 0).cpu().numpy()])
+                        N = len(outputs)
+                        for i in range(N):
+                            F1Pred  += f1_score(Ck[torch.argmax(outputs[i], dim = 0).cpu()], Ck[torch.argmax(targets[i], dim = 0).cpu().numpy()])
+                            F1Score += f1_score(Ck[torch.argmax(outputs[i], dim = 0).cpu()], train_loader.dataset.cluster_dt[i + N*batch_idx].numpy())
+
+
                         AccScore += sum(torch.argmax(outputs, dim = 1).cpu() == torch.argmax(targets, dim = 1).cpu())
                         Len += len(targets)
                         Max_cluster = torch.cat((Max_cluster, torch.argmax(outputs, dim = 1).cpu()))
@@ -72,8 +64,9 @@ class Run():
                 
             self.scheduler.step()
 
-            print(f'mean F1 score : {F1Score/Len:.2f}')
-            print(f'mean Accuracy : {AccScore/Len:.2f}')
+            print(f'F1 score : {F1Score/Len:.2f}')
+            print(f'Dice coeff : {F1Pred/Len:.2f}')
+            print(f'Accuracy : {AccScore/Len:.2f}')
 
             if Reclustering != None :
                 print(f'Estimated percentage of category changes :{torch.sum( Max_cluster == Reclustering).item()/len(Max_cluster)*100 :.2f} %')

@@ -37,7 +37,8 @@ class TrainDataset(Dataset):
         self.transform = transform
         self.data_dir = data_dir
         self.metadata = cluster_dt.metadata
-        self.cluster = cluster.labels_
+        self.cluster_dt = cluster_dt
+        self.cluster = cluster
         self.N_cluster = N_cluster
 
     def __len__(self):

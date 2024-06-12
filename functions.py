@@ -63,8 +63,8 @@ def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
     Score = np.zeros(N_cluster)
     Ck = np.zeros((N_cluster,N_spec))
     for cl in tqdm(range(N_cluster)):
-        if sum((clusters.labels_ == cl)) != 0:
-            spec_k, f1 = Ck_species(cluster_dt[(clusters.labels_ == cl)])
+        if sum((clusters == cl)) != 0:
+            spec_k, f1 = Ck_species(cluster_dt[(clusters == cl)])
             Score[cl] = f1
             Ck[cl] = spec_k
     if save:
@@ -72,3 +72,18 @@ def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
     if score :
         return Ck, Score
     return Ck
+
+'''
+def dist1(X):
+    m = len(X)
+    dist = np.zeros(m*(m-1)//2)
+    for i in range(m-1):
+        for j in range(i+1,m):
+            x, y = X[i], X[j]
+            f1 = f1_score(x,y)
+            dist[m * i + j - ((i + 2) * (i + 1)) // 2] = np.sqrt(1 - f1)
+    return dist
+'''
+
+def dist1(x,y):
+    return np.sqrt(1 - f1_score(x,y))
