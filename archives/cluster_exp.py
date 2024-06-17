@@ -26,7 +26,7 @@ def bio_prox(df1, df2, id_1, id_2, marker):
     dmarker = abs(df1.loc[df1.surveyId == id_1, marker].values[0]- df2.loc[df2.surveyId == id_2, marker].values[0])
     return dmarker, f1_score(spec_1,spec_2)
 
-def true_pos(df1, df2, id_1, id_2):
+def true_pos(df1, df2, id_1, id_2S):
     if 'surveyId' not in df2.columns:
         df2 = df1
     spec_1 = df1.loc[df1.surveyId == id_1].values[0,:11254]
@@ -220,3 +220,4 @@ plt.show()
 sb.scatterplot(test2, x = 'lon', y = 'lat', palette= sb.color_palette("tab10"))
 sb.scatterplot(test2.loc[test2.cluster == np.argmax(Size2)], x = 'lon', y = 'lat', palette= sb.color_palette("tab10"))
 plt.show()
+

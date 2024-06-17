@@ -3,6 +3,9 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from functions import f1_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 class Run():
     def __init__(self,model,optimizer,scheduler,device):
@@ -16,13 +19,14 @@ class Run():
     def train(self, train_loader,num_epochs,Ck):
         print(f"Training for {num_epochs} epochs started.")
         Reclustering = None
-        p =  0.99 # part of the validation dataset
+        p =  0.1 # part of the validation dataset
         for epoch in range(num_epochs):
             print(f"Epoch {epoch+1}/{num_epochs}")
             self.model.train()
             validation = False
+            CM = None
 
-            for batch_idx, (data, targets, _) in tqdm(enumerate(train_loader), total = len(train_loader)):
+            for batch_idx, (data, targets, species) in tqdm(enumerate(train_loader), total = len(train_loader)):
                 data = data.to(self.device)
                 targets = targets.to(self.device)
                 self.optimizer.zero_grad()
@@ -53,12 +57,17 @@ class Run():
                         N = len(outputs)
                         for i in range(N):
                             F1Pred  += f1_score(Ck[torch.argmax(outputs[i], dim = 0).cpu()], Ck[torch.argmax(targets[i], dim = 0).cpu().numpy()])
-                            F1Score += f1_score(Ck[torch.argmax(outputs[i], dim = 0).cpu()], train_loader.dataset.cluster_dt[i + N*batch_idx].numpy())
+                            F1Score += f1_score(Ck[torch.argmax(outputs[i], dim = 0).cpu()], species[i].numpy())
 
 
                         AccScore += sum(torch.argmax(outputs, dim = 1).cpu() == torch.argmax(targets, dim = 1).cpu())
                         Len += len(targets)
                         Max_cluster = torch.cat((Max_cluster, torch.argmax(outputs, dim = 1).cpu()))
+                        
+                        if CM is None:
+                            CM = confusion_matrix(torch.argmax(targets, dim = 1).cpu(), torch.argmax(outputs, dim = 1).cpu(), labels = np.arange(0, len(targets[0])))
+                        else : 
+                            CM += confusion_matrix(torch.argmax(targets, dim = 1).cpu(), torch.argmax(outputs, dim = 1).cpu(), labels = np.arange(0, len(targets[0])))
                     
 
                 
@@ -67,6 +76,11 @@ class Run():
             print(f'F1 score : {F1Score/Len:.2f}')
             print(f'Dice coeff : {F1Pred/Len:.2f}')
             print(f'Accuracy : {AccScore/Len:.2f}')
+            
+            '''
+            disp = ConfusionMatrixDisplay(confusion_matrix= CM, display_labels= np.arange(0, len(targets[0])))
+            fig = disp.plot()
+            '''
 
             if Reclustering != None :
                 print(f'Estimated percentage of category changes :{torch.sum( Max_cluster == Reclustering).item()/len(Max_cluster)*100 :.2f} %')

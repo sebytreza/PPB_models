@@ -4,10 +4,8 @@ from tqdm import tqdm
 from sklearn.preprocessing import normalize
 
 def f1_score(survey1,survey2):
-
-    VP = np.sum(np.logical_and(survey1,survey2))
-    F = np.sum(np.logical_xor(survey1,survey2))
-    return 2*VP/(2*VP + F)
+    VP = np.array(survey1) @ np.array(survey2).T
+    return 2*VP/(np.linalg.norm(survey1)**2 + np.linalg.norm(survey2)**2)
 
 
 def bio_prox(df1, df2, id_1, id_2, marker):
@@ -47,11 +45,11 @@ def Ck_species(df,method = 'all'): # method is 'all' or int (number of random pi
         assemblage[spec_id] = 1
         if method == 'all':
             for survey in df:
-                f1 += f1_score(assemblage,survey)
+                f1 += f1_score(assemblage/np.linalg.norm(assemblage),survey)
             f1 = f1/len(df)
         else :
             for _ in range(method):
-                f1 += f1_score(assemblage,random.choice(df))
+                f1 += f1_score(assemblage/np.linalg.norm(assemblage),random.choice(df))
             f1 = f1/method
         id += 1
     return assemblage_max, f1max
@@ -72,18 +70,6 @@ def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
     if score :
         return Ck, Score
     return Ck
-
-'''
-def dist1(X):
-    m = len(X)
-    dist = np.zeros(m*(m-1)//2)
-    for i in range(m-1):
-        for j in range(i+1,m):
-            x, y = X[i], X[j]
-            f1 = f1_score(x,y)
-            dist[m * i + j - ((i + 2) * (i + 1)) // 2] = np.sqrt(1 - f1)
-    return dist
-'''
 
 def dist1(x,y):
     return np.sqrt(1 - f1_score(x,y))

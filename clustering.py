@@ -1,6 +1,9 @@
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.preprocessing import normalize
 from scipy.cluster.hierarchy import fclusterdata
+import numpy as np
+from tqdm import tqdm
+from functions import f1_score
 
 class Clustering(MiniBatchKMeans):
 
@@ -10,8 +13,12 @@ class Clustering(MiniBatchKMeans):
 
     def fit(self,X) :
         normalize(X,'l2', axis = 1, copy = False)
-        return super().fit(X).labels_
-
+        centers = super().fit(X).cluster_centers_
+        self.labels_ = np.zeros(len(X)).astype('int')
+        for i in tqdm(range(len(X))):
+            self.labels_[i] = int(np.argmax([f1_score(X[i], center) for center in centers]))
+        return self.labels_
+    
     
 class HClustering():
     def __init__(self, n_clusters, metric, method):

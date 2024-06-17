@@ -25,7 +25,7 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-N_clusters = 100
+N_clusters = 40
 
 seed = 42
 # Set seed for Python's built-in random number generator
@@ -45,7 +45,7 @@ train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/"
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
-clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
+clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 640, max_no_improvement= 40)
 #clustering = HClustering(n_clusters = N_clusters, metric = dist1, method = 'single')
 cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
 cluster = clustering.fit(next(iter(cluster_dataloader)).numpy())
@@ -70,7 +70,6 @@ if torch.cuda.is_available():
 
 learning_rate = 0.0002
 
-
 model = ModifiedResNet18(N_clusters).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 scheduler = CosineAnnealingLR(optimizer, T_max=25, verbose=True)
@@ -80,7 +79,7 @@ Exp = Run(model,optimizer,scheduler,device)
 if __name__ == '__main__' :
 
     run_kmeans = False
-    new_model = False
+    new_model = True
     num_epochs = 10
 
     if run_kmeans :

@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.cluster import MiniBatchKMeans
 from torch_kmeans import KMeans
+from tqdm import tqdm
 
 import seaborn as sb
 import matplotlib.pyplot as plt
@@ -19,7 +20,7 @@ from dataset import TrainDataset, TestDataset, ClusteringDataset
 from model import ModifiedResNet18
 from train import Run
 from clustering import Clustering
-from functions import assembly
+from functions import assembly,f1_score
 
 # Dataset and DataLoader
 batch_size = 64
@@ -54,8 +55,55 @@ cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset
 cluster = clustering.fit(next(iter(cluster_dataloader)).numpy())
 
 
-S
-sb.scatterplot(x = cluster_dataset.metadata["lon"], y = cluster_dataset.metadata["lat"], hue = cluster)
-plt.show()
+# sb.scatterplot(x = cluster_dataset.metadata["lon"], y = cluster_dataset.metadata["lat"], hue = cluster)
+# plt.show()
 Size = np.bincount(cluster)
 print(Size)
+
+cluster_dt = next(iter(cluster_dataloader)).numpy()
+
+Ck_spec, Score_norm = assembly(cluster,cluster_dt, N_clusters, score = True)
+
+
+Labels = clustering.labels_
+Centers = clustering.cluster_centers_
+Score_km = []
+Score_km_F1 = []
+Clusters_F1 = []
+Clusters = []
+Score_F1  = []
+Score_f1 = []
+Score = []
+
+Assembly = []
+Assembly_F1 = []
+
+Diff = []
+
+for i in tqdm(range(len(cluster_dt))):
+    idx = cluster_dt[i]
+    Assembly.append(np.linalg.norm(idx/np.linalg.norm(idx) - Ck_spec[Labels[i]]/np.linalg.norm(Ck_spec[Labels[i]])))
+    Assembly_F1.append(f1_score(idx, Ck_spec[Labels[i]]))
+
+    idx = cluster_dt[i]
+    Score_km.append(np.linalg.norm(idx/np.linalg.norm(idx) - Centers[Labels[i]]/np.linalg.norm(Centers[Labels[i]])))
+    Score_km_F1.append(f1_score(idx, Centers[Labels[i]]))
+
+    cl = np.argmax([f1_score(idx,center) for center in Ck_spec])
+    Clusters_F1.append(cl)
+    Score_F1.append(f1_score(idx,Ck_spec[cl]))
+
+    cl = np.argmin([np.linalg.norm(idx/np.linalg.norm(idx) - center/np.linalg.norm(center)) for center in Ck_spec])
+    Clusters.append(cl)
+    Score.append(np.linalg.norm(idx/np.linalg.norm(idx) - Ck_spec[cl]/np.linalg.norm(Ck_spec[cl])))
+    Score_f1.append(f1_score(idx, Ck_spec[cl]))
+
+    Diff.append(f1_score(Ck_spec[Labels[i]],Ck_spec[cl]))
+
+beta = np.array(Score_F1)/(1 - np.array(Score)**2/2)
+sb.scatterplot(x = Labels, y = Diff, hue = Labels == 4)
+plt.show() 
+plt.figure()
+sb.scatterplot(x = np.arange(0,sum(Labels == 4)), y = np.array(Score_F1)[Labels == 4]/(1 - np.array(Score)**2/2)[Labels == 4])
+plt.show()
+

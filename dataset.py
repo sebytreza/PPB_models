@@ -49,7 +49,7 @@ class TrainDataset(Dataset):
         survey_id = self.metadata.surveyId[idx]
         sample = torch.load(os.path.join(self.data_dir, f"GLC24-PA-{self.subset}-bioclimatic_monthly_{survey_id}_cube.pt"))
         label = torch.zeros(self.N_cluster)
-        label[self.cluster[idx]] = 1.
+        label[self.cluster[idx]] = 1
 
         # Ensure the sample is in the correct format for the transform
         if isinstance(sample, torch.Tensor):
@@ -60,7 +60,7 @@ class TrainDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        return sample, label, survey_id
+        return sample, label, self.cluster_dt[idx]
     
 class TestDataset(TrainDataset):
     def __init__(self, data_dir, metadata, subset, transform=None):
