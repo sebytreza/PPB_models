@@ -19,8 +19,8 @@ import matplotlib.pyplot as plt
 from dataset import TrainDataset, TestDataset, ClusteringDataset
 from model import ModifiedResNet18
 from train import Run
-from clustering import Clustering
-from functions import assembly,f1_score
+from clustering import Clustering, MClustering
+from functions import assembly,f1_score, dist1
 
 # Dataset and DataLoader
 batch_size = 64
@@ -49,11 +49,20 @@ train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/"
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
-clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
+clustering = MClustering(n_clusters = N_clusters, metric = dist1, method = 'alternate')
+#clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
 cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
 #top_k = np.argsort(np.sum(next(iter(cluster_dataloader)).numpy(), axis = 0))[-200:]
 cluster = clustering.fit(next(iter(cluster_dataloader)).numpy())
 
+test_metadata_path = "/home/gigotleandri/Documents/GLC24_SOLUTION_FILE.csv"
+test_metadata = pd.read_csv(test_metadata_path)
+test_metadata.columns = ['surveyId', 'speciesId']
+test_dataset = ClusteringDataset(test_metadata, concat = True)
+test_dataloader = DataLoader(test_dataset,batch_size = len(test_dataset))
+test_clusters = clustering.predict(next(iter(test_dataloader)).numpy())
+
+test_Size = np.bincount(test_clusters)
 
 # sb.scatterplot(x = cluster_dataset.metadata["lon"], y = cluster_dataset.metadata["lat"], hue = cluster)
 # plt.show()
@@ -62,7 +71,7 @@ print(Size)
 
 cluster_dt = next(iter(cluster_dataloader)).numpy()
 
-Ck_spec, Score_norm = assembly(cluster,cluster_dt, N_clusters, score = True)
+Ck_spec, Score_norm = assembly(cluster,cluster_dt, N_clusters, score = True, method = 'medoid')
 
 
 Labels = clustering.labels_
@@ -107,3 +116,39 @@ plt.figure()
 sb.scatterplot(x = np.arange(0,sum(Labels == 4)), y = np.array(Score_F1)[Labels == 4]/(1 - np.array(Score)**2/2)[Labels == 4])
 plt.show()
 
+
+## test on test set cluster attribution
+
+test_data = next(iter(test_dataloader)).numpy()
+
+assembly_F1 = []
+
+for i in tqdm(range(len(test_data))):
+    idx = test_data[i]
+    assembly_F1.append(f1_score(idx, Ck_spec[test_clusters[i]]))
+
+sb.boxplot(x = test_clusters, y = assembly_F1)
+plt.show()
+
+sb.histplot(x = assembly_F1)
+plt.show()
+
+
+
+surveys = []
+Spec = None
+for i in tqdm(range(len(test_data))):       
+    ck_spec = Ck_spec[test_clusters[i]]
+
+    if Spec is None:
+        Spec = ck_spec
+    else:
+        Spec = np.concatenate((Spec, ck_spec), axis = 0)
+
+    surveys.extend(test_data.metadata.surveyId[i])
+
+surveys = test_dataset.metadata.surveyId.values
+Spec = Ck_spec[test_clusters]
+    
+data_concatenated = [' '.join(map(str, np.where(row == 1)[0])) for row in Spec]
+pd.DataFrame({'surveyId': surveys, 'predictions': data_concatenated,}).to_csv("submissions/test_prediction.csv", index = False)

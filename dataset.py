@@ -8,24 +8,35 @@ num_classes = 11255
 
 
 class ClusteringDataset(Dataset):
-    def __init__(self, metadata):
+    def __init__(self, metadata, concat = False):
 
-        self.metadata = metadata
-        self.metadata = self.metadata.dropna(subset="speciesId").reset_index(drop=True)
-        self.metadata['speciesId'] = self.metadata['speciesId'].astype(int)
-        self.label_dict = self.metadata.groupby('surveyId')['speciesId'].apply(list).to_dict()
-        self.metadata = self.metadata.drop_duplicates(subset="surveyId").reset_index(drop=True)
+        self.concat = concat
+        if concat :
+            self.metadata = metadata.dropna(subset="speciesId").reset_index(drop=True)
+            self.label_dict = metadata.groupby('surveyId')['speciesId'].apply(list).to_dict()
+
+        else :
+            self.metadata = metadata
+            self.metadata = self.metadata.dropna(subset="speciesId").reset_index(drop=True)
+            self.metadata['speciesId'] = self.metadata['speciesId'].astype(int)
+            self.label_dict = self.metadata.groupby('surveyId')['speciesId'].apply(list).to_dict()
+            self.metadata = self.metadata.drop_duplicates(subset="surveyId").reset_index(drop=True)
+            
 
     def __len__(self):
         return len(self.metadata)
 
     def __getitem__(self, idx):
-        
+
         survey_id = self.metadata.surveyId[idx]
-        species_ids = self.label_dict.get(survey_id, [])  # Get list of species IDs for the survey ID
+
+        if self.concat :
+            species_ids = np.array(self.label_dict.get(survey_id, '')[0].split(' ')).astype(int)
+        else :
+            species_ids = self.label_dict.get(survey_id, [])  # Get list of species IDs for the survey ID
         label = torch.zeros(num_classes)  
         for species_id in species_ids:
-            label_id = species_id
+            label_id = int(species_id)
             label[label_id] = 1  # Set the corresponding class index to 1 for each species
 
         return label
@@ -41,11 +52,11 @@ class TrainDataset(Dataset):
         self.cluster = cluster
         self.N_cluster = N_cluster
 
+
     def __len__(self):
         return len(self.metadata)
 
     def __getitem__(self, idx):
-
         survey_id = self.metadata.surveyId[idx]
         sample = torch.load(os.path.join(self.data_dir, f"GLC24-PA-{self.subset}-bioclimatic_monthly_{survey_id}_cube.pt"))
         label = torch.zeros(self.N_cluster)

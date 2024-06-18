@@ -15,7 +15,7 @@ from torch_kmeans import KMeans
 from dataset import TrainDataset, TestDataset, ClusteringDataset
 from model import ModifiedResNet18
 from train import Run
-from clustering import Clustering, HClustering
+from clustering import Clustering, HClustering, MClustering
 from functions import assembly
 from functions import dist1
 
@@ -25,7 +25,7 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-N_clusters = 40
+N_clusters = 100
 
 seed = 42
 # Set seed for Python's built-in random number generator
@@ -45,8 +45,9 @@ train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/"
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
-clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 640, max_no_improvement= 40)
+#clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 640, max_no_improvement= 40)
 #clustering = HClustering(n_clusters = N_clusters, metric = dist1, method = 'single')
+clustering = MClustering(n_clusters = N_clusters, metric = dist1, method = 'alternate')
 cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
 cluster = clustering.fit(next(iter(cluster_dataloader)).numpy())
 train_dataset = TrainDataset(train_data_path, cluster, cluster_dataset, N_clusters, subset="train", transform=transform)
@@ -78,7 +79,7 @@ Exp = Run(model,optimizer,scheduler,device)
 
 if __name__ == '__main__' :
 
-    run_kmeans = False
+    run_kmeans = True
     new_model = True
     num_epochs = 10
 

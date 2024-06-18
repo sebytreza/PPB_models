@@ -54,15 +54,28 @@ def Ck_species(df,method = 'all'): # method is 'all' or int (number of random pi
         id += 1
     return assemblage_max, f1max
 
+def medoid(df):
+    f_med = 0
+    for survey1 in df:
+        f1 = -1
+        for survey2 in df :
+            f1 += f1_score(survey1, survey2)
+        if f1 > f_med :
+            med = survey1
+            f_med = f1
+    return med, f_med/(len(df)-1)
 
-def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
+def assembly(clusters, cluster_dt, N_cluster, save = False, score = False, method = False):
 
     N_spec = len(cluster_dt[0])
     Score = np.zeros(N_cluster)
     Ck = np.zeros((N_cluster,N_spec))
     for cl in tqdm(range(N_cluster)):
         if sum((clusters == cl)) != 0:
-            spec_k, f1 = Ck_species(cluster_dt[(clusters == cl)])
+            if method == 'medoid' :
+                spec_k, f1 = medoid(cluster_dt[(clusters == cl)])
+            else :
+                spec_k, f1 = Ck_species(cluster_dt[(clusters == cl)])
             Score[cl] = f1
             Ck[cl] = spec_k
     if save:
@@ -71,5 +84,12 @@ def assembly(clusters, cluster_dt, N_cluster, save = False, score = False):
         return Ck, Score
     return Ck
 
+
+
 def dist1(x,y):
-    return np.sqrt(1 - f1_score(x,y))
+    dist = 1 - f1_score(x,y)
+    if dist < 0 : # allow to pass float rounding problems
+        return 0
+    return np.sqrt(dist)
+
+    
