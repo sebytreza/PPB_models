@@ -2,8 +2,6 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import torch.nn as nn
 
-
-
 class ModifiedResNet18(nn.Module):
     def __init__(self, num_classes):
         super(ModifiedResNet18, self).__init__()

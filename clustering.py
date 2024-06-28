@@ -43,8 +43,8 @@ class MClustering(KMedoids):
         super().__init__(n_clusters, metric, method)
 
     def fit(self, X):
-        epochs = 20
-        batchsize = 1000
+        epochs = 10
+        batchsize = 5000
         for i in tqdm(range(epochs)):
             batch_id = np.random.randint(0, len(X), batchsize)
             super().fit(X[batch_id])

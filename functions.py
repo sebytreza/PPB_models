@@ -54,16 +54,24 @@ def Ck_species(df,method = 'all'): # method is 'all' or int (number of random pi
         id += 1
     return assemblage_max, f1max
 
-def medoid(df):
+# def Ck_species(df):
+#     normalize(df,'l2', axis = 1, copy = False)
+#     assemblage = np.sum(df, axis = 0)
+#     return np.array[(assemblage > 0.5)]
+
+
+def medoid(df, method = 'all'):
     f_med = 0
+    if method != 'all' and len(df) > method:
+        df = df[np.random.choice(len(df), method)]
     for survey1 in df:
-        f1 = -1
+        f1 = 0
         for survey2 in df :
             f1 += f1_score(survey1, survey2)
-        if f1 > f_med :
+        if f1 >= f_med :
             med = survey1
             f_med = f1
-    return med, f_med/(len(df)-1)
+    return med, f_med/len(df)
 
 def assembly(clusters, cluster_dt, N_cluster, save = False, score = False, method = False):
 
@@ -73,9 +81,9 @@ def assembly(clusters, cluster_dt, N_cluster, save = False, score = False, metho
     for cl in tqdm(range(N_cluster)):
         if sum((clusters == cl)) != 0:
             if method == 'medoid' :
-                spec_k, f1 = medoid(cluster_dt[(clusters == cl)])
+                spec_k, f1 = medoid(cluster_dt[(clusters == cl)], method = 1000)
             else :
-                spec_k, f1 = Ck_species(cluster_dt[(clusters == cl)])
+                spec_k, f1 = Ck_species(cluster_dt[(clusters == cl)], method = 1000)
             Score[cl] = f1
             Ck[cl] = spec_k
     if save:
