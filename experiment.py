@@ -191,7 +191,7 @@ plt.show()
 import matplotlib.pyplot as plt
 import scipy.special as sp
 import seaborn as sb
-X = np.sum(next(iter(cluster_dataloader)).numpy(),axis = 1)
+X = np.sum(cluster_dt,axis = 1)
 E = np.mean(X)
 V = np.var(X)
 p = E/V
@@ -201,8 +201,16 @@ f = lambda k : sp.gamma(k + n)/sp.factorial(k)/sp.gamma(n)*p**n*(1-p)**k
 T = np.arange(0,100, 1)
 F = [f(t) for t in T]
 plt.style.use('tex')
-sb.histplot(x = X, bins = 50, stat = 'density')
-sb.lineplot(x = T,y = F, color = 'orange')
+c = {'cyan' : '#41a39e',
+         'yellow' : '#e1ae36',
+         'red' : '#ef4036',
+         'lila' : '#a589ff',
+         'green' : '#52b400',
+         'pink' : '#f5766e',
+         'blue' : '#00b7eb'}
+
+sb.histplot(x = X, bins = 50, stat = 'density', color = c['cyan'])
+sb.lineplot(x = T,y = F, color = c['yellow'])
 plt.xlabel('Number of species')
 plt.legend(['Histogram of the survey dataset','_no_legend',f'Negative binomial fit n= {n:.2f}, p = {p:.2f}'])
 
@@ -215,7 +223,7 @@ for _ in range(N):
     F2.append(2*np.sqrt(x_y[0])*np.sqrt(x_y[1])/(x_y[0] + x_y[1]))
 
 
-sb.histplot(x = F2, stat = 'density', binwidth = 0.02)
+sb.histplot(x = F2, stat = 'density', binwidth = 0.02, color = c['blue'])
 
 plt.xlabel(r'$\alpha$ value')
 hist = np.bincount(X.astype(int))
@@ -226,7 +234,7 @@ for i in range(1, len(hist)) :
         F3.append(hist[i] * hist[j])
         T2.append(2*(np.sqrt(i)*np.sqrt(j))/(i + j))
 
-sb.histplot(x = T2, weights= F3, binwidth = 0.02, stat = 'density',color ='orange' )
+sb.histplot(x = T2, weights= F3, binwidth = 0.02, stat = 'density',color = c['yellow'] )
 plt.legend(['Negative binomial', 'Survey dataset'])
 plt.show()
 

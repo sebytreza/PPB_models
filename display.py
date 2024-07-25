@@ -8,7 +8,8 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.metrics import precision_recall_fscore_support, r2_score
 from sklearn.cluster import MiniBatchKMeans
 from torch_kmeans import KMeans
 from tqdm import tqdm
@@ -19,7 +20,7 @@ import matplotlib.pyplot as plt
 from dataset import TrainDataset, TestDataset, ClusteringDataset
 from model import ModifiedResNet18
 from train import Run
-from clustering import Clustering, MClustering
+from clustering import Clustering, MClustering, T_SNE
 from functions import assembly,f1_score, dist1
 
 # Dataset and DataLoader
@@ -46,6 +47,7 @@ train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
 train_metadata = pd.read_csv(train_metadata_path)
 cluster_dataset = ClusteringDataset(train_metadata)
 cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
+cluster_dt = next(iter(cluster_dataloader)).numpy()
 
 # Load Training metadata
 
@@ -62,64 +64,114 @@ test_dataloader = DataLoader(test_dataset,batch_size = len(test_dataset))
 
 
 def score_distrib(n_clusters):
-
-    #clustering = MClustering(n_clusters = n_clusters, metric = dist1, method = 'alternate')
-    clustering = Clustering(n_clusters= n_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
-    cluster_dt = next(iter(cluster_dataloader)).numpy()
+    n_clusters = 600
+    clustering = MClustering(n_clusters = n_clusters, metric = dist1, method = 'alternate')
+    #clustering = Clustering(n_clusters= n_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
+    #clustering = MiniBatchKMeans(n_clusters=n_clusters, n_init="auto",verbose= False, batch_size=64, max_no_improvement=20, random_state= 42)
     train_cluster = clustering.fit(cluster_dt.copy())
-    Ck_spec, _ = assembly(train_cluster,cluster_dt, n_clusters, score = True, method = 'centroïdes')
+    #Ck_spec2, _ = assembly(train_cluster,cluster_dt, n_clusters, score = True, method = 'centroid')
+    Ck_spec = clustering.cluster_centers_
     test_dt = next(iter(test_dataloader)).numpy()
     test_cluster = clustering.predict(test_dt)
 
-
     cluster = train_cluster
-    score = np.zeros(len(cluster))
-   
     score_f1 = np.zeros(len(cluster))
 
     for i in tqdm(range(len(cluster))):
         idx = cluster_dt[i]
         score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
-        score[i] = f1_score(idx/np.linalg.norm(idx),Ck_spec[cluster[i]]/np.linalg.norm(Ck_spec[cluster[i]]))
+        #score[i] = f1_score(idx/np.linalg.norm(idx),Ck_spec[cluster[i]]/np.linalg.norm(Ck_spec[cluster[i]]))
 
     cluster = test_cluster
-    test_score = np.zeros(len(cluster))
     test_score_f1 = np.zeros(len(cluster))
 
     for i in tqdm(range(len(cluster))):
         idx = test_dt[i]
         test_score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
-        test_score[i] = f1_score(idx/np.linalg.norm(idx),Ck_spec[cluster[i]]/np.linalg.norm(Ck_spec[cluster[i]]))
-    
-    return score, score_f1, test_score, test_score_f1
 
 
-Score = None
+    return  score_f1, test_score_f1
+
+# Score_cl = []
+# for i in range(n_clusters):
+#     Score_cl.append(np.mean(score_f1[(train_cluster == i)]))
+
+# Dist = []
+# for i in range(n_clusters) : 
+#     Dist.append(np.mean([np.sqrt(np.sum((id/np.linalg.norm(id) - Ck_spec[i])**2)) for id in  cluster_dt[(train_cluster == i)]]))
+
+# Nb_spec = []
+# for i in range(n_clusters):
+#     Nb_spec.append(np.mean(np.sum(cluster_dt[(train_cluster == i)], axis  = 1)))
+
 Score_f1 = None
-Test_score = None
 Test_score_f1 = None
-N_clusters = [10,50,100,200,500,1000]
-
+N_clusters = [100, 300, 500, 600, 800, 1000]
+#N_clusters = [600, 1000, 2000, 3000, 5000, 7000]
 for n in N_clusters:
-    sc, sc_f1, tsc, tsc_f1 = score_distrib(n)
+    sc_f1, tsc_f1 = score_distrib(n)
 
-    if Score is None:
-        Score = [sc]
+    if Score_f1 is None:
+        #Score = [sc]
         Score_f1 = [sc_f1]
-        Test_score = [tsc]
+        #Test_score = [tsc]
         Test_score_f1 = [tsc_f1]
 
     else :
-        Score    = np.concatenate((Score, [sc]))
+        #Score    = np.concatenate((Score, [sc]))
         Score_f1 = np.concatenate((Score_f1, [sc_f1]))
-        Test_score = np.concatenate((Test_score, [tsc]))
+        #Test_score = np.concatenate((Test_score, [tsc]))
         Test_score_f1 = np.concatenate((Test_score_f1, [tsc_f1]))
                                 
-np.save('models/Score.npy',Score)
-np.save('models/Score_F1.npy', Score_f1)
-np.save('models/Score_test.npy', Test_score)
-np.save('models/Score_F1_test.npy', Test_score_f1)
+#np.save('models/Score_nn.npy',Score)
+np.save('models/Score_F1_nn.npy', Score_f1)
+#np.save('models/Score_test_nn.npy', Test_score)
+np.save('models/Score_F1_test_nn.npy', Test_score_f1)
 
+
+n_clusters = 600
+clustering = Clustering(n_clusters= n_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
+cluster_dt = next(iter(cluster_dataloader)).numpy()
+train_cluster = clustering.fit(cluster_dt.copy())
+
+
+Ck_spec, F1 = assembly(train_cluster,cluster_dt, n_clusters, score = True, method = 'centroid')
+#np.save('models/nb_barycenter.npy', F1)
+
+test_dt = next(iter(test_dataloader)).numpy()
+test_cluster = clustering.predict(test_dt)
+
+cluster = train_cluster
+score_f1 = np.zeros(len(cluster))
+
+for i in tqdm(range(len(cluster))):
+    idx = cluster_dt[i]
+    score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
+    #score[i] = f1_score(idx/np.linalg.norm(idx),Ck_spec[cluster[i]]/np.linalg.norm(Ck_spec[cluster[i]]))
+
+cluster = test_cluster
+test_score_f1 = np.zeros(len(cluster))
+
+for i in tqdm(range(len(cluster))):
+    idx = test_dt[i]
+    test_score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
+
+np.save('models/centroid_test.npy', test_score_f1)
+np.save('models/opti.npy', score_f1)
+
+for i in range(len(F1)):
+    if isinstance(F1[i], float):
+        F1[i] = np.zeros(1000)
+
+# tsne = T_SNE()
+# mask = np.random.choice(len(cluster_dt), 1000)
+# Y = tsne.fit_transform(cluster_dt[mask])
+
+# sb.scatterplot(x = Y.T[0], y = Y.T[1], hue = train_cluster[mask])
+# plt.show()
+
+test_dt = next(iter(test_dataloader)).numpy()
+test_cluster = clustering.predict(test_dt)
 
 '''
 Labels = clustering.labels_
@@ -200,3 +252,18 @@ Spec = Ck_spec[test_clusters]
 data_concatenated = [' '.join(map(str, np.where(row == 1)[0])) for row in Spec]
 pd.DataFrame({'surveyId': surveys, 'predictions': data_concatenated,}).to_csv("submissions/test_prediction.csv", index = False)
 '''
+
+
+
+N = 100000
+f1 = []
+f1_bar = []
+for i in range(N):
+    id_x, id_y= np.random.randint(0, len(cluster_dt),2)
+    f1.append(f1_score(cluster_dt[id_x], cluster_dt[id_y]))
+    f1_bar.append(f1_score(cluster_dt[id_x]/np.linalg.norm(cluster_dt[id_x]), cluster_dt[id_y]/np.linalg.norm(cluster_dt[id_y])))
+
+plt.scatter(f1, f1_bar, c = c['cyan'])
+plt.show()
+
+r2_score(f1,f1_bar)
