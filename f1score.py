@@ -1,10 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as p
+import numba
 from tqdm import tqdm
-from functions import f1_score
 import math
 
+
+
+@numba.njit(fastmath=True, nogil=True)
+def f1_score(survey1,survey2):
+    VP = np.logical_and(survey1,survey2)
+    return 2*np.sum(VP)/(np.sum(survey1) + np.sum(survey2))
+
+@numba.njit(fastmath=True, nogil=True)
 def decide(p):
     p = np.sort(p)[::-1]
     n = len(p)
@@ -12,7 +20,7 @@ def decide(p):
     C = np.zeros((n+1,n+1))
     C[0,0] = 1
     
-    for i in range(n):
+    for i in range(n):              #O(n²) terme à écrire, tft
         C[i+1,0] = (1 - p[i])*C[i,0]
         for j in range(i+1):
             C[i+1,j+1] = p[i]*C[i,j] + (1 - p[i])*C[i,j+1]
@@ -34,37 +42,22 @@ def decide(p):
         
     return kmax, Fmax
 
-def main(x, c = 1):    
-    sol = p.read_csv('GLC24_SOLUTION_FILE.csv')['predictions'].values
-
+@numba.njit(fastmath=True, parallel=True)
+def process(x,c,a,SOL, PROBAS):
+    S = len(SOL)
     N = 11255
-    S = len(sol)
-    SOL = np.zeros((S, N))
-    for i in range(S) :
-        row = sol[i]
-        specs = row.split(' ')
-        for spec in specs :
-            SOL[i, int(spec)] = 1
-        
-    pred_file = p.read_csv('predictions_test_dataset.csv')
-    probas = pred_file['probas']
-    preds = pred_file['predictions']
 
-    PROBAS = np.zeros((S,N))
-    for i in range(S) :
-        r_preds = preds[i].split(' ')
-        r_probas = probas[i].split(' ')
-        for j in range(len(r_preds)):
-            PROBAS[i,int(r_preds[j])] = float(r_probas[j])
-
-    F1_ref = np.zeros(50)
-    F1 = 0
-    a = 0.85
+    F1_top = 0.
+    F1_avg = 0.
+    F1 = 0.
     T = lambda x : x**a/(x**a + (1 - x)**a)
     PRO = PROBAS/(PROBAS + x*(1 - PROBAS))
     PRO = c*T(PRO)
     Plim = []
-    for i in tqdm(range(S)): 
+    
+    th = np.sort(PRO.flatten())[-int(25*S)]
+    for i in range(S):
+        print(i)
         output = PRO[i]
         tar = SOL[i]
         
@@ -72,25 +65,51 @@ def main(x, c = 1):
         
         mask = np.where(output > 0)[0]
         K, _ = decide(output[mask])
-        '''
-        topk = np.zeros(N)
-        for j in range(50):
-            topk[sort[j]] = 1
-            f1_ref = f1_score(tar, topk)
-            F1_ref[j] += f1_ref
-        '''
-        pred = np.zeros(N)
+
+        pred = np.zeros(N).astype(np.intp)
         pred[sort[:K]] = 1
         Plim.append(output[sort[K-1]])
         f1 = f1_score(pred,tar)
         F1 += f1
-        #print(K, int(np.sum(tar)), f1 > f1_ref)
-    plt.figure()
-    calib_fig(x,a)
-    plt.scatter(Plim, Plim, c = 'red',marker = '.', s = 10)
-    print(F1/S, max(F1_ref)/S)
+        
+        topk = np.zeros(N)
+        topk[sort[:25]] = 1
+        F1_top += f1_score(tar,topk)
+        
+        avgk = np.zeros(N)
+        for id in numba.prange(N):
+            avgk[id] = output[id] > th
+        F1_avg += f1_score(tar,avgk)
+        
+    print(F1/S, F1_top/S, F1_avg/S)
     return (F1/S)
 
+def main(x = 10, c = 0.66, a= 0.85):    
+    sol = p.read_csv('GLC24_SOLUTION_FILE.csv')['predictions'].to_numpy(dtype = str)
+    pred_file = p.read_csv('predictions_test_dataset.csv')
+    
+    probas = pred_file['probas'].to_numpy(dtype=str)
+    preds = pred_file['predictions'].to_numpy(dtype=str)
+    
+    S = len(sol)
+    N = 11255
+    SOL = np.zeros((S, N), dtype = np.intp)
+    for i in range(S):
+        row = sol[i]
+        specs = row.split(' ')
+        for spec in specs :
+            id = int(spec)
+            SOL[i, id] = 1
+            
+    PROBAS = np.zeros((S,N), dtype = np.float32)
+    for i in range(S) :
+        r_preds = preds[i].split(' ')
+        r_probas = probas[i].split(' ')
+        for j in range(len(r_preds)):
+            id = int(r_preds[j])
+            PROBAS[i,id] = float(r_probas[j])
+
+    process(x,c,a,SOL, PROBAS)
 
 
 
@@ -129,7 +148,7 @@ def test_ctl():
     print(SX, MX, np.sqrt(VX))
     print((SX - MX)/np.sqrt(VX))
     
-def calib_fig(x= 10, c =1):
+def calib_fig(x= 10, c = 0.66, a= 0.85):
     sol = p.read_csv('GLC24_SOLUTION_FILE.csv')['predictions'].values
 
     N = 11255
@@ -152,7 +171,7 @@ def calib_fig(x= 10, c =1):
         r_probas = probas[i].split(' ')
         for j in range(len(r_preds)):
             PROBAS[i,int(r_preds[j])] = float(r_probas[j])
-    a = 0.85
+            
     T = lambda x : x**a/(x**a + (1 - x)**a)
     PRO = PROBAS/(PROBAS + x*(1 - PROBAS))
     PRO = c*T(PRO)
@@ -171,8 +190,8 @@ def calib_fig(x= 10, c =1):
         if len(idx[0]!= 0) :
             Y.append(np.mean(SOL[idx]))
             sY.append(np.std(SOL[idx])/np.sqrt(len(idx[0])))
-            X.append(np.mean(PRO[idx])) 
-    X,Y, sY = np.array(X), np.array(Y), np.array(sY)
+            X.append(np.mean(PRO[idx]))
+    X, Y, sY = np.array(X), np.array(Y), np.array(sY)
     plt.scatter(X,Y)
     plt.plot(X,Y,c = 'blue')
     plt.plot(X,Y + 3*sY,'--',c = 'blue')
@@ -180,6 +199,8 @@ def calib_fig(x= 10, c =1):
     plt.plot(X,Y,c = 'blue')
 
     plt.plot(X,X, c = 'orange')
+    plt.xlabel('Predicted probability')
+    plt.ylabel('True accuracy')
     plt.gca().set_aspect('equal')
 
 def temp(A):
@@ -190,27 +211,17 @@ def temp(A):
             plt.plot(X,fa(alpha,X))
     plt.gca().set_aspect('equal')
     plt.show()
-    
-#calib_fig(x = 10, c = 0.66)
-main(x = 10, c = 0.66)
 
+main(x = 10, c = 1, a = 1)
+'''
+plt.figure()
+calib_fig(x = 1)
+plt.figure()
+calib_fig()
+plt.figure()
+calib_fig(x = 10, c = 0.66)
 plt.show()
-'''   
-mini = 0.1
-index = []
-F1 = []
-x = 0.1
-while x != 0.001:
-    for i in range(10):
-        index.append(i*x + mini)
-        F1.append(main(10,i*x + mini))
-    sort = np.array(index)[np.argsort(F1)]
-    if not math.isclose(abs(sort[-1] - sort[-2]),x):
-        print("NON CONVEXE")
-        break
-    else:
-        mini = min(sort[-1], sort[-2])
-    x = x / 10
+main(x = 10, c = 0.66)
 
 plt.show()
 '''
