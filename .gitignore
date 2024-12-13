@@ -1,2 +1,3 @@
 data/
-data/
+models/*.pth
+auto_encoder.pth 
