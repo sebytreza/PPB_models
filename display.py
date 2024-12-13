@@ -2,22 +2,21 @@ import os
 import torch
 import numpy as np
 import pandas as pd
+import timeit
 import random
 import torchvision.models as models
 import torchvision.transforms as transforms
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.metrics import precision_recall_fscore_support, r2_score
-from sklearn.cluster import MiniBatchKMeans
-from torch_kmeans import KMeans
 from tqdm import tqdm
 
 import seaborn as sb
 import matplotlib.pyplot as plt
 
-from dataset import TrainDataset, TestDataset, ClusteringDataset
+from dataset import TrainDataset, TestDataset, SpeciesDataset,PostBERTDataset
 from model import ModifiedResNet18
 from train import Run
 from clustering import Clustering, MClustering, T_SNE
@@ -29,7 +28,7 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-N_clusters = 100
+N_clusters = 600
 
 seed = 42
 # Set seed for Python's built-in random number generator
@@ -43,67 +42,85 @@ if torch.cuda.is_available():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+train_data_path = "data/cubes/GLC24-PA-train-bioclimatic_monthly/" 
 train_metadata_path = 'data/metadata/GLC24-PA-metadata-train.csv'
-train_metadata = pd.read_csv(train_metadata_path)
-cluster_dataset = ClusteringDataset(train_metadata)
-cluster_dataloader = DataLoader(cluster_dataset,batch_size = len(cluster_dataset))
-cluster_dt = next(iter(cluster_dataloader)).numpy()
+bert_metadata_path = 'data/latent_space.csv'
 
+p_validation = 0.2
+train_metadata = pd.read_csv(train_metadata_path)
+bert_metadata = pd.read_csv(bert_metadata_path)
+
+spec_dataset = SpeciesDataset(train_metadata)
+spec_dl = iter(DataLoader(spec_dataset, batch_size= int(len(spec_dataset)*(1 - p_validation)),shuffle= False))
+train_id, train_spec = next(spec_dl)
+validation_id, validation_spec = next(spec_dl)
 # Load Training metadata
 
-test_metadata_path = "/home/gigotleandri/Documents/GLC24_SOLUTION_FILE.csv"
+test_data_path = "data/cubes/GLC24-PA-test-bioclimatic_monthly/"
+test_metadata_path = 'data/metadata/GLC24-PA-metadata-test.csv'
 test_metadata = pd.read_csv(test_metadata_path)
-test_metadata.columns = ['surveyId', 'speciesId']
-test_dataset = ClusteringDataset(test_metadata, concat = True)
-test_dataloader = DataLoader(test_dataset,batch_size = len(test_dataset))
-
+test_dataset = TestDataset(test_data_path, test_metadata, transform=transform)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 # sb.scatterplot(x = cluster_dataset.metadata["lon"], y = cluster_dataset.metadata["lat"], hue = cluster)
 # plt.show()
 
 
+cluster_dataset = PostBERTDataset(bert_metadata, train_id.numpy())
+val_cluster_dataset = PostBERTDataset(bert_metadata, validation_id.numpy())
+start = timeit.default_timer()
 
-def score_distrib(n_clusters):
-    n_clusters = 600
-    clustering = MClustering(n_clusters = n_clusters, metric = dist1, method = 'alternate')
-    #clustering = Clustering(n_clusters= n_clusters, n_init="auto", verbose = True, batch_size= 64, max_no_improvement= 20)
-    #clustering = MiniBatchKMeans(n_clusters=n_clusters, n_init="auto",verbose= False, batch_size=64, max_no_improvement=20, random_state= 42)
-    train_cluster = clustering.fit(cluster_dt.copy())
-    #Ck_spec2, _ = assembly(train_cluster,cluster_dt, n_clusters, score = True, method = 'centroid')
-    Ck_spec = clustering.cluster_centers_
-    test_dt = next(iter(test_dataloader)).numpy()
-    test_cluster = clustering.predict(test_dt)
+# clustering = KMeans(n_clusters= N_clusters, n_init="auto")
+# train_cluster = clustering.fit(cluster_dataset[:]).labels_
+# val_cluster = clustering.predict(val_cluster_dataset[:])
+# clustering = MiniBatchKMeans(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 640, max_no_improvement= 40)
+# clustering = MClustering(n_clusters = N_clusters, metric = dist1, method = 'alternate')
 
-    cluster = train_cluster
-    score_f1 = np.zeros(len(cluster))
+clustering = Clustering(n_clusters= N_clusters, n_init="auto", verbose = True, batch_size= 640, max_no_improvement= 40)
+train_cluster = clustering.fit(train_spec)
+val_cluster= clustering.predict(validation_spec)
 
-    for i in tqdm(range(len(cluster))):
-        idx = cluster_dt[i]
-        score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
-        #score[i] = f1_score(idx/np.linalg.norm(idx),Ck_spec[cluster[i]]/np.linalg.norm(Ck_spec[cluster[i]]))
+Ck_spec = assembly(train_cluster,train_spec, N_clusters, save = True, method = 'opti')
 
-    cluster = test_cluster
-    test_score_f1 = np.zeros(len(cluster))
+delta =  timeit.default_timer() - start
+print(delta)
 
-    for i in tqdm(range(len(cluster))):
-        idx = test_dt[i]
-        test_score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
+Ck_spec = clustering.cluster_centers_
+cluster = train_cluster
+score_f1 = np.zeros(len(cluster))
+dist = np.zeros(len(cluster))
+
+for i in tqdm(range(len(cluster))) :
+    idx = train_spec[i].numpy()
+    score_f1[i] = f1_score(idx,Ck_spec[cluster[i]]/max(Ck_spec[cluster[i]]))
+    dist[i] = np.sqrt((np.sum(idx/np.linalg.norm(idx) - clustering.cluster_centers_[cluster[i]])**2))
 
 
-    return  score_f1, test_score_f1
+cluster = val_cluster
+test_score_f1 = np.zeros(len(cluster))
 
-# Score_cl = []
-# for i in range(n_clusters):
-#     Score_cl.append(np.mean(score_f1[(train_cluster == i)]))
+for i in tqdm(range(len(cluster))):
+    idx = validation_spec[i].numpy()
+    test_score_f1[i] = f1_score(idx,Ck_spec[cluster[i]])
 
-# Dist = []
-# for i in range(n_clusters) : 
-#     Dist.append(np.mean([np.sqrt(np.sum((id/np.linalg.norm(id) - Ck_spec[i])**2)) for id in  cluster_dt[(train_cluster == i)]]))
 
-# Nb_spec = []
-# for i in range(n_clusters):
-#     Nb_spec.append(np.mean(np.sum(cluster_dt[(train_cluster == i)], axis  = 1)))
+Score_cl = []
+for i in range(N_clusters):
+    Score_cl.append(np.mean(score_f1[(train_cluster == i)]))
 
+Dist = []
+Centers = clustering.cluster_centers_
+for i in range(N_clusters) : 
+    Dist.append(np.mean([np.sqrt(np.sum((id/np.linalg.norm(id) - Centers[i])**2)) for id in  train_spec[(train_cluster == i)].numpy()]))
+
+Nb_spec = []
+for i in range(N_clusters):
+    Nb_spec.append(torch.mean(torch.sum(train_spec[(train_cluster == i)], dim  = 1)).item())
+
+mean = np.mean(score_f1)
+Size = np.bincount(train_cluster)
+
+'''
 Score_f1 = None
 Test_score_f1 = None
 N_clusters = [100, 300, 500, 600, 800, 1000]
@@ -172,7 +189,7 @@ for i in range(len(F1)):
 
 test_dt = next(iter(test_dataloader)).numpy()
 test_cluster = clustering.predict(test_dt)
-
+'''
 '''
 Labels = clustering.labels_
 Centers = clustering.cluster_centers_
@@ -263,7 +280,3 @@ for i in range(N):
     f1.append(f1_score(cluster_dt[id_x], cluster_dt[id_y]))
     f1_bar.append(f1_score(cluster_dt[id_x]/np.linalg.norm(cluster_dt[id_x]), cluster_dt[id_y]/np.linalg.norm(cluster_dt[id_y])))
 
-plt.scatter(f1, f1_bar, c = c['cyan'])
-plt.show()
-
-r2_score(f1,f1_bar)

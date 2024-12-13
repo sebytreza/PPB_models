@@ -15,18 +15,17 @@ class Clustering(MiniBatchKMeans):
         super().__init__(n_clusters, n_init= n_init,random_state= 42) #_clusters, n_init, verbose, batch_size, max_no_improvement)
 
     def predict(self,X) : 
-        normalize(X,'l2', axis = 1, copy = False)
+        X = normalize(X,'l2', axis = 1)
         centers = self.cluster_centers_
         self.labels_ = np.zeros(len(X)).astype('int')
         for i in tqdm(range(len(X))):
             self.labels_[i] = int(np.argmax([f1_score(X[i], center) for center in centers]))
         return self.labels_
-        
 
     def fit(self,X) :
-        normalize(X,'l2', axis = 1, copy = False)
+        X = normalize(X,'l2', axis = 1)
         super().fit(X)
-        return self.predict(X)
+        return self.labels_
         
     
     
